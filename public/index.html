@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ricky - voice alerts for important email</title>
+    <meta name="description" content="A private app that watches Gmail and calls you when something important arrives." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230b1118'/%3E%3Cpath d='M20 46V18h13a9 9 0 0 1 0 18h-6l11 10' fill='none' stroke='%237cf3a0' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">R</div>
+          <div class="brand-text">
+            <strong>Ricky</strong>
+            <span>voice alerts</span>
+          </div>
+        </div>
+
+        <nav class="nav" id="nav">
+          <button class="nav-item active" data-view="overview">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" /></svg>
+            <span>Overview</span>
+          </button>
+          <button class="nav-item" data-view="inbox">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z" /><path d="m4 7 8 6 8-6" /></svg>
+            <span>Inbox</span>
+            <em id="nav-inbox-count" class="nav-count">0</em>
+          </button>
+          <button class="nav-item" data-view="calls">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h3l2 5-3 2a12 12 0 0 0 4 4l2-3 5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 5 6a2 2 0 0 1 2-2Z" /></svg>
+            <span>Calls</span>
+          </button>
+          <button class="nav-item" data-view="settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2" /><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8" /></svg>
+            <span>Settings</span>
+          </button>
+          <button class="nav-item" data-view="setup">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6a4 4 0 0 0-5.6 4.7L4 15.1V20h4.9l4.4-4.4A4 4 0 0 0 18 10l-3 3-2-2 3-3a4 4 0 0 0-2-2Z" /></svg>
+            <span>Setup</span>
+          </button>
+        </nav>
+
+        <div class="side-status" id="side-status">
+          <div class="side-row"><i class="dot"></i><span>Starting up</span></div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="topbar-copy">
+            <h1 id="page-title">Overview</h1>
+            <p id="page-sub">Watching your inbox and calling when it matters.</p>
+          </div>
+          <div class="topbar-actions">
+            <button class="btn ghost" id="btn-scan">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6" /><path d="M20 4v4h-4" /></svg>
+              <span>Scan now</span>
+            </button>
+            <button class="btn primary" id="btn-test">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h3l2 5-3 2a12 12 0 0 0 4 4l2-3 5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 5 6a2 2 0 0 1 2-2Z" /></svg>
+              Test my voice
+            </button>
+          </div>
+        </header>
+
+        <div class="banner hidden" id="connect-banner">
+          <div>
+            <strong>Gmail is not connected yet.</strong>
+            <span id="banner-copy">Connect your Google account so Ricky can watch for important mail.</span>
+          </div>
+          <button class="btn primary small" data-action="connect-gmail">Connect Gmail</button>
+        </div>
+
+        <!-- OVERVIEW -------------------------------------------------------->
+        <section class="view active" id="view-overview">
+          <div class="stats" id="stats">
+            <article class="stat">
+              <span class="stat-label">Important today</span>
+              <strong id="stat-important">0</strong>
+              <small>scored above your threshold</small>
+            </article>
+            <article class="stat">
+              <span class="stat-label">Calls today</span>
+              <strong id="stat-calls">0</strong>
+              <small id="stat-provider">simulation mode</small>
+            </article>
+            <article class="stat">
+              <span class="stat-label">Held calls</span>
+              <strong id="stat-queued">0</strong>
+              <small>waiting on cooldown or quiet hours</small>
+            </article>
+            <article class="stat">
+              <span class="stat-label">Last scan</span>
+              <strong id="stat-lastscan" class="stat-small">never</strong>
+              <small id="stat-lastscan-result">polling is idle</small>
+            </article>
+          </div>
+
+          <div class="columns">
+            <section class="card">
+              <div class="card-head">
+                <h2>Worth a call</h2>
+                <a class="link" href="#" data-view-link="inbox">Open inbox</a>
+              </div>
+              <div class="feed" id="feed">
+                <div class="empty">No scored email yet. Ricky checks every minute.</div>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="card-head">
+                <h2>Call activity</h2>
+                <a class="link" href="#" data-view-link="calls">All calls</a>
+              </div>
+              <div class="feed" id="activity">
+                <div class="empty">No calls placed yet.</div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <!-- INBOX ----------------------------------------------------------->
+        <section class="view" id="view-inbox">
+          <div class="toolbar">
+            <div class="chips" id="inbox-filters">
+              <button class="chip active" data-filter="all">All</button>
+              <button class="chip" data-filter="important">Important</button>
+              <button class="chip" data-filter="watch">Watch</button>
+              <button class="chip" data-filter="called">Called</button>
+            </div>
+            <span class="muted" id="inbox-summary"></span>
+          </div>
+          <div class="list" id="inbox-list">
+            <div class="empty">Nothing here yet.</div>
+          </div>
+        </section>
+
+        <!-- CALLS ----------------------------------------------------------->
+        <section class="view" id="view-calls">
+          <section class="card">
+            <div class="card-head">
+              <h2>Call log</h2>
+              <span class="muted" id="calls-summary"></span>
+            </div>
+            <div class="call-table" id="calls-list">
+              <div class="empty">No calls yet. Hit "Test my voice" to try the pipeline.</div>
+            </div>
+          </section>
+        </section>
+
+        <!-- SETTINGS -------------------------------------------------------->
+        <section class="view" id="view-settings">
+          <form id="settings-form" autocomplete="off">
+            <div class="columns">
+              <section class="card">
+                <div class="card-head"><h2>Who gets called</h2></div>
+                <div class="form-grid">
+                  <label class="field">
+                    <span>Your name (used by the voice)</span>
+                    <input type="text" name="ownerName" placeholder="Ricky" />
+                  </label>
+                  <label class="field">
+                    <span>Phone number to call</span>
+                    <input type="tel" name="destinationNumber" placeholder="+1 555 010 2030" />
+                    <small>E.164 format. Leave empty for simulation mode.</small>
+                  </label>
+                  <label class="field">
+                    <span>Call provider</span>
+                    <select name="provider">
+                      <option value="auto">Auto (best available)</option>
+                      <option value="elevenlabs">ElevenLabs agent (native call)</option>
+                      <option value="twilio">Twilio + generated MP3</option>
+                      <option value="simulate">Simulate only</option>
+                    </select>
+                  </label>
+                  <label class="field switch-field">
+                    <span>Call automatically</span>
+                    <input type="checkbox" name="autoCall" class="switch" />
+                    <small>Off means Ricky scores email but never dials.</small>
+                  </label>
+                </div>
+              </section>
+
+              <section class="card">
+                <div class="card-head"><h2>What counts as important</h2></div>
+                <div class="form-grid">
+                  <label class="field range-field">
+                    <span>Call threshold <b id="threshold-out">60</b></span>
+                    <input type="range" name="threshold" min="10" max="95" step="1" />
+                    <small>Lower calls you more often. VIP senders always clear it.</small>
+                  </label>
+                  <label class="field">
+                    <span>VIP senders</span>
+                    <textarea name="vipSenders" rows="3" placeholder="boss@company.com&#10;*@mybank.com&#10;Mum"></textarea>
+                    <small>One per line. Emails, @domains, *@domains, or names.</small>
+                  </label>
+                  <label class="field">
+                    <span>Never call about</span>
+                    <textarea name="ignoreSenders" rows="2" placeholder="news@medium.com"></textarea>
+                  </label>
+                  <label class="field">
+                    <span>Extra keywords</span>
+                    <textarea name="keywords" rows="3" placeholder="urgent, invoice, outage"></textarea>
+                  </label>
+                </div>
+              </section>
+            </div>
+
+            <div class="columns">
+              <section class="card">
+                <div class="card-head"><h2>Pacing</h2></div>
+                <div class="form-grid two">
+                  <label class="field">
+                    <span>Check inbox every (seconds)</span>
+                    <input type="number" name="pollSeconds" min="15" max="3600" step="5" />
+                  </label>
+                  <label class="field">
+                    <span>Minimum gap between calls (seconds)</span>
+                    <input type="number" name="cooldownSeconds" min="0" max="86400" step="30" />
+                  </label>
+                  <label class="field">
+                    <span>Max calls per hour</span>
+                    <input type="number" name="maxCallsPerHour" min="1" max="50" />
+                  </label>
+                  <label class="field">
+                    <span>Look back (minutes)</span>
+                    <input type="number" name="lookbackMinutes" min="5" max="1440" step="5" />
+                  </label>
+                  <label class="field switch-field full">
+                    <span>Quiet hours</span>
+                    <input type="checkbox" name="quietHoursEnabled" class="switch" />
+                  </label>
+                  <label class="field">
+                    <span>From</span>
+                    <input type="time" name="quietStart" />
+                  </label>
+                  <label class="field">
+                    <span>Until</span>
+                    <input type="time" name="quietEnd" />
+                  </label>
+                  <label class="field switch-field full">
+                    <span>Still call VIP senders during quiet hours</span>
+                    <input type="checkbox" name="callVipDuringQuietHours" class="switch" />
+                  </label>
+                </div>
+              </section>
+
+              <section class="card">
+                <div class="card-head">
+                  <h2>Voice</h2>
+                  <button type="button" class="link" id="btn-voices">Refresh voices</button>
+                </div>
+                <div class="form-grid">
+                  <label class="field">
+                    <span>ElevenLabs voice ID</span>
+                    <input type="text" name="voiceId" id="voice-select" list="voice-options" placeholder="21m00Tcm4TlvDq8ikWAM" spellcheck="false" />
+                    <datalist id="voice-options"></datalist>
+                    <small>Pick from the list or paste any voice ID. Used for the spoken note and Twilio playback.</small>
+                  </label>
+                  <label class="field">
+                    <span>Model</span>
+                    <select name="modelId">
+                      <option value="eleven_multilingual_v2">Multilingual v2 (best quality)</option>
+                      <option value="eleven_turbo_v2_5">Turbo v2.5 (fast)</option>
+                      <option value="eleven_flash_v2_5">Flash v2.5 (fastest)</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>What the voice says</span>
+                    <select name="scriptStyle">
+                      <option value="subject">Subject only (recommended)</option>
+                      <option value="brief">Subject + one-line preview</option>
+                      <option value="detailed">Subject + preview + why it was flagged</option>
+                    </select>
+                    <small>Subject only keeps calls to a few seconds.</small>
+                  </label>
+                  <label class="field switch-field">
+                    <span>Generate an audio copy of every call</span>
+                    <input type="checkbox" name="previewAudio" class="switch" />
+                    <small>Keeps a playable MP3 in the call log.</small>
+                  </label>
+                </div>
+
+                <div class="preview-box">
+                  <span class="stat-label">Hear the voice</span>
+                  <textarea id="preview-text" rows="2">Hi, this is Ricky. You just got an important email about your contract. It needs your signature before five o'clock.</textarea>
+                  <button type="button" class="btn ghost small" id="btn-preview">Preview voice</button>
+                  <audio id="preview-audio" controls hidden></audio>
+                </div>
+              </section>
+            </div>
+
+            <div class="save-bar">
+              <span class="muted" id="save-hint">Changes apply to the next scan.</span>
+              <button type="submit" class="btn primary">Save settings</button>
+            </div>
+          </form>
+        </section>
+
+        <!-- SETUP ----------------------------------------------------------->
+        <section class="view" id="view-setup">
+          <div class="columns">
+            <div class="stack">
+              <section class="card">
+                <div class="card-head"><h2>Connection checklist</h2></div>
+                <ul class="checklist" id="checklist">
+                  <li><span class="check">1</span><div><strong>Google OAuth client</strong><small>Checking...</small></div><em class="pill">...</em></li>
+                </ul>
+                <div class="row-actions">
+                  <button class="btn primary small" data-action="connect-gmail" id="btn-connect">Connect Gmail</button>
+                  <button class="btn ghost small" id="btn-disconnect">Disconnect</button>
+                </div>
+              </section>
+
+              <section class="card">
+                <div class="card-head">
+                  <h2>Environment</h2>
+                  <button class="link" data-copy="#env-sample">Copy</button>
+                </div>
+                <p class="muted small-copy">Put these in <code>Ricky/.env</code>, then restart the server.</p>
+                <pre class="code" id="env-sample">GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=http://127.0.0.1:4173/oauth2callback
+
+ELEVENLABS_API_KEY=sk_...
+ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
+
+# Optional: let an ElevenLabs agent dial natively
+ELEVENLABS_AGENT_ID=...
+ELEVENLABS_AGENT_PHONE_NUMBER_ID=...
+
+# Optional: call and play the generated MP3
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+TWILIO_FROM_NUMBER=+15550100
+
+# Needed by Twilio to fetch audio (ngrok https URL)
+PUBLIC_BASE_URL=https://your-tunnel.ngrok.app</pre>
+              </section>
+            </div>
+
+            <div class="stack">
+              <section class="card">
+                <div class="card-head">
+                  <h2>Private voice agent</h2>
+                  <button class="link" data-copy="#agent-prompt">Copy prompt</button>
+                </div>
+                <ol class="steps">
+                  <li>Create an agent in ElevenLabs → <b>Agents</b>.</li>
+                  <li>Pick your cloned/designed voice and keep the first message short.</li>
+                  <li>Paste the prompt below into the agent's system prompt.</li>
+                  <li>In <b>Phone</b>, import your Twilio number and copy the agent + phone number IDs into <code>.env</code>.</li>
+                </ol>
+                <pre class="code tall" id="agent-prompt">Loading prompt...</pre>
+              </section>
+
+              <section class="card">
+                <div class="card-head"><h2>How a call sounds</h2></div>
+                <p class="muted">Subject only, so a call lasts a few seconds:</p>
+                <pre class="code">Hi Sam, this is Ricky. You just got an important email from Dana Reed about Q4 contract renewal. That is all. Talk soon.</pre>
+                <p class="muted">Switch to a longer style in Settings if you want a preview line or the reason it was flagged.</p>
+              </section>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <audio id="player" hidden></audio>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

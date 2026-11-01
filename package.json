@@ -1,0 +1,20 @@
+{
+  "name": "ricky",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Private voice-messaging app: watches Gmail and calls you when something important lands.",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test server/tests/*.test.js"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}
