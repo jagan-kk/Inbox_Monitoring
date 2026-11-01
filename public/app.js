@@ -397,55 +397,60 @@ function renderFacts() {
 }
 
 async function renderProfile() {
-  const profile = $('#user-profile');
-  const avatar = $('#user-avatar');
-  const nameEl = $('#user-name');
-  const dropdown = $('#user-dropdown');
-
-  if (!profile || !avatar || !nameEl) return;
-
-  let user = null;
   try {
-    const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
-    if (res.ok) {
-      const data = await res.json();
-      user = data.user;
-    }
-  } catch {}
+    const profile = $('#user-profile');
+    const avatar = $('#user-avatar');
+    const nameEl = $('#user-name');
+    const dropdown = $('#user-dropdown');
 
-  if (user) {
-    profile.hidden = false;
-    const initials = (user.email || 'U').split('@')[0].split(/[._-]/).map(p => p[0]).join('').toUpperCase().slice(0, 2) || 'U';
-    avatar.textContent = initials;
-    nameEl.textContent = user.email.split('@')[0];
+    if (!profile || !avatar || !nameEl || !dropdown) return;
 
-    // Configure change-password form based on whether user has a password
-    const currentField = $('#dropdown-current-pw-field');
-    const currentLabel = $('#dropdown-current-pw-label');
-    const newLabel = $('#dropdown-new-pw-label');
-    const pwTitle = $('#dropdown-pw-title');
-    const pwBtn = $('#dropdown-change-pw-btn');
-    const currentInput = $('#dropdown-current-password');
+    let user = null;
+    try {
+      const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+      if (res.ok) {
+        const data = await res.json();
+        user = data.user || null;
+      }
+    } catch {}
 
-    if (user.hasPassword) {
-      currentField.style.display = 'block';
-      currentInput.required = true;
-      currentLabel.textContent = 'Current password';
-      newLabel.textContent = 'New password';
-      pwTitle.textContent = 'Change password';
-      pwBtn.textContent = 'Change password';
+    if (user) {
+      profile.hidden = false;
+      const email = user.email || '';
+      const initials = email.split('@')[0].split(/[._-]/).map(p => p[0]).join('').toUpperCase().slice(0, 2) || 'U';
+      avatar.textContent = initials;
+      nameEl.textContent = email.split('@')[0] || email;
+
+      // Configure change-password form based on whether user has a password
+      const currentField = $('#dropdown-current-pw-field');
+      const currentLabel = $('#dropdown-current-pw-label');
+      const newLabel = $('#dropdown-new-pw-label');
+      const pwTitle = $('#dropdown-pw-title');
+      const pwBtn = $('#dropdown-change-pw-btn');
+      const currentInput = $('#dropdown-current-password');
+
+      if (user.hasPassword) {
+        if (currentField) currentField.style.display = 'block';
+        if (currentInput) currentInput.required = true;
+        if (currentLabel) currentLabel.textContent = 'Current password';
+        if (newLabel) newLabel.textContent = 'New password';
+        if (pwTitle) pwTitle.textContent = 'Change password';
+        if (pwBtn) pwBtn.textContent = 'Change password';
+      } else {
+        // Google-sign-in users: no password yet, only show new password field
+        if (currentField) currentField.style.display = 'none';
+        if (currentInput) currentInput.required = false;
+        if (currentLabel) currentLabel.textContent = 'Set password';
+        if (newLabel) newLabel.textContent = 'New password';
+        if (pwTitle) pwTitle.textContent = 'Set password';
+        if (pwBtn) pwBtn.textContent = 'Set password';
+      }
     } else {
-      // Google-sign-in users: no password yet, only show new password field
-      currentField.style.display = 'none';
-      currentInput.required = false;
-      currentLabel.textContent = 'Set password';
-      newLabel.textContent = 'New password';
-      pwTitle.textContent = 'Set password';
-      pwBtn.textContent = 'Set password';
+      profile.hidden = true;
+      dropdown.classList.add('hidden');
     }
-  } else {
-    profile.hidden = true;
-    dropdown.classList.add('hidden');
+  } catch (error) {
+    console.error('[profile]', error.message);
   }
 }
 
@@ -455,10 +460,10 @@ async function changePassword(currentPassword, newPassword) {
     const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
     if (res.ok) {
       const data = await res.json();
-      email = data.user?.email;
+      email = data?.user?.email || null;
     }
   } catch {}
-  if (!email) throw new Error('No user session found.');
+  if (!email) throw new Error('No user session found. Please sign in again.');
 
   const res = await fetch('/api/auth/change-password', {
     method: 'POST',
@@ -472,8 +477,10 @@ async function changePassword(currentPassword, newPassword) {
   }
 
   toast('Password changed successfully.', 'ok');
-  $('#profile-current-password').value = '';
-  $('#profile-new-password').value = '';
+  const currentInput = $('#dropdown-current-password');
+  const newInput = $('#dropdown-new-password');
+  if (currentInput) currentInput.value = '';
+  if (newInput) newInput.value = '';
 }
 
 /* ---------------------------------------------------------------- settings --- */
