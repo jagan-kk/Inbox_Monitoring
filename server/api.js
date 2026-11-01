@@ -10,6 +10,8 @@ import { readAudio, saveAudio } from './services/audio.js';
 import { addSubscription, publicKey, pushStatus, removeSubscription, sendPush } from './services/push.js';
 import { broadcast } from './services/events.js';
 import { storageMode } from './db.js';
+import { hashPassword, verifyPassword, sessionToken, cookieOptions, findUserByEmail, parseCookies, COOKIE } from './auth.js';
+import { userStore } from './store.js';
 
 export const api = Router();
 
@@ -337,6 +339,136 @@ api.get('/auth/google/url', (req, res) => {
   } catch (error) {
     fail(res, error);
   }
+});
+
+api.get('/auth/google/login-url', (req, res) => {
+  try {
+    const state = `login:${crypto.randomUUID()}`;
+    res.json({ url: buildAuthUrl(state, redirectUri(req)) });
+  } catch (error) {
+    fail(res, error);
+  }
+});
+
+/* ---- Email/password registration & login ---- */
+
+api.post('/auth/register', async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const password = String(req.body?.password || '');
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+  }
+  if (findUserByEmail(email)) {
+    return res.status(409).json({ error: 'An account with this email already exists.' });
+  }
+
+  const passwordHash = await hashPassword(password);
+  const userId = crypto.randomBytes(16).toString('hex');
+  const user = {
+    id: userId,
+    email,
+    passwordHash,
+    createdAt: Date.now(),
+  };
+  const users = userStore.data || [];
+  users.push(user);
+  userStore.data = users;
+  userStore.save();
+
+  const token = sessionToken(userId);
+  const sessionExpires = Date.now() + 1000 * 60 * 60 * 24 * 30;
+  user.sessionToken = token;
+  user.sessionExpires = sessionExpires;
+  userStore.save();
+
+  res.cookie('ricky_session', token, cookieOptions(req));
+  res.json({ ok: true, user: { id: user.id, email: user.email } });
+});
+
+api.post('/auth/login', async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const password = String(req.body?.password || '');
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+
+  const user = findUserByEmail(email);
+  if (!user || !user.passwordHash) {
+    return res.status(401).json({ error: 'No account found with that email.' });
+  }
+
+  const ok = await verifyPassword(password, user.passwordHash);
+  if (!ok) {
+    return res.status(401).json({ error: 'Incorrect password.' });
+  }
+
+  const token = sessionToken(user.id);
+  const sessionExpires = Date.now() + 1000 * 60 * 60 * 24 * 30;
+  user.sessionToken = token;
+  user.sessionExpires = sessionExpires;
+  userStore.save();
+
+  res.cookie('ricky_session', token, cookieOptions(req));
+  res.json({ ok: true, user: { id: user.id, email: user.email } });
+});
+
+/* ---- Change / set password ---- */
+
+api.post('/auth/change-password', async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const currentPassword = String(req.body?.currentPassword || '');
+  const newPassword = String(req.body?.newPassword || '');
+
+  if (!email || !newPassword) {
+    return res.status(400).json({ error: 'Email and new password are required.' });
+  }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: 'New password must be at least 6 characters.' });
+  }
+
+  const user = findUserByEmail(email);
+  if (!user) {
+    return res.status(401).json({ error: 'No account found with that email.' });
+  }
+
+  // If the user already has a password (email/password signup), verify current password.
+  // Google-sign-in users have no password hash, so they can set one without a current password.
+  if (user.passwordHash) {
+    if (!currentPassword) {
+      return res.status(400).json({ error: 'Current password is required.' });
+    }
+    const ok = await verifyPassword(currentPassword, user.passwordHash);
+    if (!ok) {
+      return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+  }
+
+  user.passwordHash = await hashPassword(newPassword);
+  userStore.save();
+
+  res.json({ ok: true });
+});
+
+/* ---- Current user ---- */
+
+api.get('/auth/me', async (req, res) => {
+  const value = parseCookies(req.headers.cookie)[COOKIE];
+  if (!value) {
+    return res.status(401).json({ error: 'Not signed in.' });
+  }
+
+  const users = userStore.data || [];
+  const user = users.find((u) => u.sessionToken === value && u.sessionExpires && Date.now() < u.sessionExpires);
+  if (!user) {
+    return res.status(401).json({ error: 'Session expired.' });
+  }
+
+  res.json({ user: { id: user.id, email: user.email, hasPassword: Boolean(user.passwordHash) } });
 });
 
 api.post('/gmail/disconnect', async (req, res) => {

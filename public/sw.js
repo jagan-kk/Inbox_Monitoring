@@ -1,6 +1,6 @@
 /* Ricky service worker — receives the "incoming call" push and opens the app. */
 
-const VERSION = 'ricky-v3';
+const VERSION = 'ricky-v14';
 const SHELL = [
   '/',
   '/styles.css',

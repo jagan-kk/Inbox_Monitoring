@@ -134,6 +134,7 @@ function render() {
   renderChecklist();
   renderFacts();
   renderPushUI();
+  renderProfile();
   if (!state.settingsDirty && state.settings) fillSettings(state.settings);
 }
 
@@ -393,6 +394,86 @@ function renderFacts() {
   $('#facts').innerHTML = facts
     .map(([key, value]) => `<dt>${esc(key)}</dt><dd title="${esc(value)}">${esc(value)}</dd>`)
     .join('');
+}
+
+async function renderProfile() {
+  const profile = $('#user-profile');
+  const avatar = $('#user-avatar');
+  const nameEl = $('#user-name');
+  const dropdown = $('#user-dropdown');
+
+  if (!profile || !avatar || !nameEl) return;
+
+  let user = null;
+  try {
+    const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+    if (res.ok) {
+      const data = await res.json();
+      user = data.user;
+    }
+  } catch {}
+
+  if (user) {
+    profile.hidden = false;
+    const initials = (user.email || 'U').split('@')[0].split(/[._-]/).map(p => p[0]).join('').toUpperCase().slice(0, 2) || 'U';
+    avatar.textContent = initials;
+    nameEl.textContent = user.email.split('@')[0];
+
+    // Configure change-password form based on whether user has a password
+    const currentField = $('#dropdown-current-pw-field');
+    const currentLabel = $('#dropdown-current-pw-label');
+    const newLabel = $('#dropdown-new-pw-label');
+    const pwTitle = $('#dropdown-pw-title');
+    const pwBtn = $('#dropdown-change-pw-btn');
+    const currentInput = $('#dropdown-current-password');
+
+    if (user.hasPassword) {
+      currentField.style.display = 'block';
+      currentInput.required = true;
+      currentLabel.textContent = 'Current password';
+      newLabel.textContent = 'New password';
+      pwTitle.textContent = 'Change password';
+      pwBtn.textContent = 'Change password';
+    } else {
+      // Google-sign-in users: no password yet, only show new password field
+      currentField.style.display = 'none';
+      currentInput.required = false;
+      currentLabel.textContent = 'Set password';
+      newLabel.textContent = 'New password';
+      pwTitle.textContent = 'Set password';
+      pwBtn.textContent = 'Set password';
+    }
+  } else {
+    profile.hidden = true;
+    dropdown.classList.add('hidden');
+  }
+}
+
+async function changePassword(currentPassword, newPassword) {
+  let email = null;
+  try {
+    const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+    if (res.ok) {
+      const data = await res.json();
+      email = data.user?.email;
+    }
+  } catch {}
+  if (!email) throw new Error('No user session found.');
+
+  const res = await fetch('/api/auth/change-password', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, currentPassword, newPassword }),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Password change failed.');
+  }
+
+  toast('Password changed successfully.', 'ok');
+  $('#profile-current-password').value = '';
+  $('#profile-new-password').value = '';
 }
 
 /* ---------------------------------------------------------------- settings --- */
@@ -736,15 +817,22 @@ function startRinging() {
 
     const ping = (freq, at, duration) => {
       const osc = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
+      osc2.type = 'sine';
       osc.frequency.value = freq;
+      osc2.frequency.value = freq * 1.5; // harmonic for presence
+      osc2.detune.value = 5; // slight detune for richness
       gain.gain.setValueAtTime(0.0001, at);
-      gain.gain.exponentialRampToValueAtTime(0.13, at + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.35, at + 0.03); // louder ringtone
       gain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
       osc.connect(gain).connect(ctx.destination);
+      osc2.connect(gain);
       osc.start(at);
       osc.stop(at + duration + 0.05);
+      osc2.start(at);
+      osc2.stop(at + duration + 0.05);
     };
 
     const pattern = () => {
@@ -1152,6 +1240,62 @@ function bind() {
     state.settingsDirty = true;
     if (event.target.name === 'threshold') $('#threshold-out').textContent = event.target.value;
   });
+
+  /* User profile dropdown (top right) */
+  const profileMenuBtn = $('#user-menu-btn');
+  const userDropdown = $('#user-dropdown');
+  if (profileMenuBtn && userDropdown) {
+    profileMenuBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      userDropdown.classList.toggle('hidden');
+      $('#dropdown-change-pw-form').classList.add('hidden');
+    });
+
+    $('#dropdown-change-password').addEventListener('click', () => {
+      userDropdown.classList.remove('hidden');
+      $('#dropdown-change-pw-form').classList.remove('hidden');
+    });
+
+    $('#dropdown-close-pw').addEventListener('click', () => {
+      $('#dropdown-change-pw-form').classList.add('hidden');
+    });
+
+    $('#dropdown-change-pw-btn').addEventListener('click', async () => {
+      const current = $('#dropdown-current-password').value;
+      const newPass = $('#dropdown-new-password').value;
+      const btn = $('#dropdown-change-pw-btn');
+      if (!newPass) return;
+      // If user has a password, current password is required
+      const currentField = $('#dropdown-current-pw-field');
+      if (currentField.style.display !== 'none' && !current) return;
+      btn.disabled = true;
+      try {
+        await changePassword(current, newPass);
+        $('#dropdown-current-password').value = '';
+        $('#dropdown-new-password').value = '';
+        $('#dropdown-change-pw-form').classList.add('hidden');
+      } catch (error) {
+        toast(error.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    $('#dropdown-signout').addEventListener('click', async () => {
+      userDropdown.classList.add('hidden');
+      try {
+        await fetch('/logout', { method: 'POST' });
+      } catch {}
+      location.href = '/login';
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (event) => {
+      if (!userDropdown.hidden && !userDropdown.contains(event.target) && !profileMenuBtn.contains(event.target)) {
+        userDropdown.classList.add('hidden');
+      }
+    });
+  }
 
   $('#inbox-filters').addEventListener('click', (event) => {
     const chip = event.target.closest('.chip');

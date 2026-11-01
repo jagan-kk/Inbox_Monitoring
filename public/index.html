@@ -36,6 +36,44 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6" /><path d="M20 4v4h-4" /></svg>
           </button>
           <span class="conn" id="conn" aria-label="Connection status"></span>
+          <div class="user-profile" id="user-profile" hidden>
+            <div class="user-avatar" id="user-avatar">?</div>
+            <span class="user-name" id="user-name">You</span>
+            <button class="user-menu-btn" id="user-menu-btn" type="button" aria-label="Profile menu">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18M3 6h18M3 18h18" stroke-width="2"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- USER PROFILE DROPDOWN -->
+        <div class="user-dropdown hidden" id="user-dropdown">
+          <div class="dropdown-item" id="dropdown-change-password">
+            <svg viewBox="0 0 24 24" aria-hidden="true" style="margin-right:8px;"><path d="M7 14a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM11 16a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM15 18a2 2 0 1 1-4 0 2 2 0 0 1 4 0z" stroke-width="2"/></svg>
+            Change password
+          </div>
+          <div class="dropdown-item" id="dropdown-signout">
+            <svg viewBox="0 0 24 24" aria-hidden="true" style="margin-right:8px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4l5 5v11" stroke-width="2"/></svg>
+            Sign out
+          </div>
+
+          <!-- Change / set password form (shown inline after clicking "Change password") -->
+          <div class="dropdown-section hidden" id="dropdown-change-pw-form">
+            <div class="dropdown-item dropdown-header" style="justify-content:space-between;">
+              <span id="dropdown-pw-title" style="font-size:12px;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;">Change password</span>
+              <button class="dropdown-close" id="dropdown-close-pw" type="button">✕</button>
+            </div>
+            <form id="dropdown-change-pw-form-inner" class="dropdown-form">
+              <label class="field dropdown-field" id="dropdown-current-pw-field">
+                <span id="dropdown-current-pw-label">Current password</span>
+                <input id="dropdown-current-password" type="password" required autocomplete="current-password" />
+              </label>
+              <label class="field dropdown-field">
+                <span id="dropdown-new-pw-label">New password</span>
+                <input id="dropdown-new-password" type="password" minlength="6" required autocomplete="new-password" />
+              </label>
+              <button class="btn primary dropdown-btn" id="dropdown-change-pw-btn" type="button">Change password</button>
+            </form>
+          </div>
         </div>
       </header>
 
@@ -326,11 +364,6 @@ UPSTASH_REDIS_REST_TOKEN=...
 
 # Lets a free scheduler ping /api/cron/scan
 CRON_SECRET=another-long-secret</pre>
-          </section>
-
-          <section class="card">
-            <div class="card-head"><h2>Account</h2></div>
-            <a class="btn ghost block" href="/logout">Sign out</a>
           </section>
         </section>
       </main>

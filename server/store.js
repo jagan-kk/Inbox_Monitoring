@@ -8,6 +8,7 @@ const KEYS = {
   state: 'ricky:state',
   tokens: 'ricky:tokens',
   push: 'ricky:push',
+  users: 'ricky:users',
 };
 
 /**
@@ -95,8 +96,9 @@ export const stateStore = new JsonStore('state', path.join(DATA_DIR, 'state.json
 });
 export const tokenStore = new JsonStore('tokens', path.join(DATA_DIR, 'google-tokens.json'), {});
 export const pushStore = new JsonStore('push', path.join(DATA_DIR, 'push.json'), []);
+export const userStore = new JsonStore('users', path.join(DATA_DIR, 'users.json'), []);
 
-const stores = [settingsStore, stateStore, tokenStore, pushStore];
+const stores = [settingsStore, stateStore, tokenStore, pushStore, userStore];
 
 let lastLoadAt = 0;
 

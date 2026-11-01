@@ -1,11 +1,12 @@
+import crypto from 'node:crypto';
 import express from 'express';
 import path from 'node:path';
 import { ROOT, env } from './config.js';
 import { api, baseUrl } from './api.js';
 import { subscribe, broadcast } from './services/events.js';
 import { storageMode } from './db.js';
-import { flushStores, getState, loadStores, stateStore } from './store.js';
-import { authMiddleware, authRouter } from './auth.js';
+import { flushStores, getState, loadStores, stateStore, userStore } from './store.js';
+import { authMiddleware, authRouter, COOKIE, sessionToken, cookieOptions, safeNext, findUserByEmail } from './auth.js';
 import { buildStatus, scan } from './services/pipeline.js';
 import { connectedEmail, handleCallback } from './services/gmail.js';
 
@@ -54,18 +55,49 @@ export function createApp() {
 
   // --- Google OAuth callback ----------------------------------------------
   app.get('/oauth2callback', async (req, res) => {
-    const { code, error } = req.query;
+    const { code, error, state, next } = req.query;
     if (error) return res.redirect(`/?error=${encodeURIComponent(String(error))}`);
     if (!code) return res.redirect('/?error=Missing+authorization+code');
 
+    const isLogin = String(state || '').startsWith('login:');
+
     try {
       const tokens = await handleCallback(String(code), redirectUri(req));
+
+      if (isLogin) {
+        // Google login: find or create user account, then set session cookie.
+        let user = findUserByEmail(tokens.email);
+        if (!user) {
+          const userId = crypto.randomBytes(16).toString('hex');
+          user = {
+            id: userId,
+            email: tokens.email,
+            passwordHash: null,
+            googleAuth: true,
+            createdAt: Date.now(),
+          };
+          const users = userStore.data || [];
+          users.push(user);
+          userStore.data = users;
+          userStore.save();
+        }
+
+        const token = sessionToken(user.id);
+        const sessionExpires = Date.now() + 1000 * 60 * 60 * 24 * 30;
+        user.sessionToken = token;
+        user.sessionExpires = sessionExpires;
+        userStore.save();
+
+        res.cookie(COOKIE, token, cookieOptions(req));
+        return res.redirect(safeNext(next || '/'));
+      }
+
+      // Existing flow: connect Gmail for email monitoring.
       getState().gmailAccount = tokens.email || connectedEmail();
       stateStore.save();
       broadcast('gmail:connected', { email: getState().gmailAccount });
       broadcast('status', buildStatus());
       await flushStores();
-      // A first look right after connecting makes the app feel alive.
       scan({ trigger: 'after-connect' }).catch((e) => console.error('[scan]', e.message));
       res.redirect('/?connected=1');
     } catch (err) {

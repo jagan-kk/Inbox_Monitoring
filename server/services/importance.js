@@ -8,7 +8,7 @@ const URGENT_PATTERNS = [
   [/action required|response required|needs? your (input|approval|attention)|please (review|sign|confirm)|signature required/i, 'needs your action', 16],
   [/deadline|due (today|tomorrow|by)|final notice|last chance|overdue|expires? (today|soon)/i, 'mentions a deadline', 16],
   [/payment failed|invoice|past due|wire transfer|refund|billing issue|failed charge/i, 'is about money or billing', 15],
-  [/offer letter|contract|interview|termination|resignation|legal notice/i, 'may affect your work or contract', 15],
+  [/offer letter|contract|interview|termination|resignation|legal notice/i, 'may affect your work or career', 30],
   [/production|outage|server down|incident|build failed|deploy failed/i, 'looks like an operational alert', 14],
   [/admission|tuition|scholarship|exam|transcript|enrollment/i, 'is about school or enrollment', 11],
 ];
