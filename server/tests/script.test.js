@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildScript } from '../services/elevenlabs.js';
+import { buildScript, cleanForSpeech } from '../services/tts.js';
 
 const email = {
   from: { name: 'Dana Reed', email: 'dana@company.com' },

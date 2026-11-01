@@ -8,50 +8,79 @@ export const AUDIO_DIR = path.join(DATA_DIR, 'audio');
 
 fs.mkdirSync(AUDIO_DIR, { recursive: true });
 
-const str = (value, fallback = '') =>
-  typeof value === 'string' && value.trim() ? value.trim() : fallback;
-
+const str = (value, fallback = '') => (typeof value === 'string' && value.trim() ? value.trim() : fallback);
 const num = (value, fallback) => {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 };
+const bool = (value, fallback = false) => {
+  if (value === undefined || value === '') return fallback;
+  return /^(1|true|yes|on)$/i.test(String(value));
+};
 
 const port = num(process.env.PORT, 4173);
-const publicBaseUrl = str(process.env.PUBLIC_BASE_URL, `http://127.0.0.1:${port}`).replace(/\/+$/, '');
+const isServerless = Boolean(
+  process.env.VERCEL ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.NETLIFY ||
+    process.env.CF_PAGES
+);
+const publicBaseUrl = str(process.env.PUBLIC_BASE_URL, isServerless ? '' : `http://127.0.0.1:${port}`).replace(/\/+$/, '');
 
 export const env = {
   port,
   host: str(process.env.HOST, '127.0.0.1'),
   publicBaseUrl,
+  isServerless,
+  /** In-process polling works on a long-running host. Serverless needs a cron ping. */
+  selfPoll: bool(process.env.SELF_POLL, !isServerless),
+
+  // Access control. Strongly recommended whenever the app is reachable publicly.
+  appPassword: str(process.env.APP_PASSWORD),
+  sessionSecret: str(process.env.SESSION_SECRET),
+  cronSecret: str(process.env.CRON_SECRET),
+
   google: {
     clientId: str(process.env.GOOGLE_CLIENT_ID),
     clientSecret: str(process.env.GOOGLE_CLIENT_SECRET),
-    redirectUri: str(process.env.GOOGLE_REDIRECT_URI, `${publicBaseUrl}/oauth2callback`),
+    // Optional. When empty the redirect URI is derived from the incoming request.
+    redirectUri: str(process.env.GOOGLE_REDIRECT_URI),
   },
-  eleven: {
-    apiKey: str(process.env.ELEVENLABS_API_KEY),
-    voiceId: str(process.env.ELEVENLABS_VOICE_ID, '21m00Tcm4TlvDq8ikWAM'),
-    modelId: str(process.env.ELEVENLABS_MODEL_ID, 'eleven_multilingual_v2'),
-    agentId: str(process.env.ELEVENLABS_AGENT_ID),
-    agentPhoneNumberId: str(process.env.ELEVENLABS_AGENT_PHONE_NUMBER_ID),
+
+  // Voice generation. `auto` prefers ElevenLabs (free tier) and falls back to
+  // Microsoft Edge's free neural voices when there is no key or a quota error.
+  tts: {
+    provider: str(process.env.TTS_PROVIDER, 'auto'), // auto | elevenlabs | edge
+    elevenApiKey: str(process.env.ELEVENLABS_API_KEY),
+    elevenVoiceId: str(process.env.ELEVENLABS_VOICE_ID, '21m00Tcm4TlvDq8ikWAM'),
+    elevenModelId: str(process.env.ELEVENLABS_MODEL_ID, 'eleven_multilingual_v2'),
+    edgeVoice: str(process.env.EDGE_TTS_VOICE, 'en-US-AriaNeural'),
+    edgeRate: str(process.env.EDGE_TTS_RATE, '+0%'),
   },
-  twilio: {
-    accountSid: str(process.env.TWILIO_ACCOUNT_SID),
-    authToken: str(process.env.TWILIO_AUTH_TOKEN),
-    fromNumber: str(process.env.TWILIO_FROM_NUMBER),
+
+  vapid: {
+    publicKey: str(process.env.VAPID_PUBLIC_KEY),
+    privateKey: str(process.env.VAPID_PRIVATE_KEY),
+    subject: str(process.env.VAPID_SUBJECT, 'mailto:ricky@example.com'),
   },
+
+  // Upstash Redis REST (or Vercel KV, same API). Required on serverless hosts
+  // so settings, Gmail tokens and call audio survive restarts.
+  redis: {
+    url: str(process.env.UPSTASH_REDIS_REST_URL) || str(process.env.KV_REST_API_URL),
+    token: str(process.env.UPSTASH_REDIS_REST_TOKEN) || str(process.env.KV_REST_API_TOKEN),
+  },
+
   pollSeconds: Math.max(15, num(process.env.POLL_SECONDS, 60)),
 };
 
 export const DEFAULT_SETTINGS = {
-  // Who gets called, and how.
-  destinationNumber: '',
-  provider: 'auto', // auto | elevenlabs | twilio | simulate
+  // Who is being called.
   ownerName: '',
 
   // Importance engine.
   threshold: 60,
-  autoCall: true,
+  autoAlert: true,
   vipSenders: [],
   ignoreSenders: [],
   keywords: [
@@ -68,29 +97,37 @@ export const DEFAULT_SETTINGS = {
     'outage',
   ],
 
-  // Pacing so you never get spammed by calls.
+  // Pacing so the phone never gets spammed.
   pollSeconds: env.pollSeconds,
   cooldownSeconds: 300,
-  maxCallsPerHour: 6,
+  maxAlertsPerHour: 6,
   lookbackMinutes: 60,
 
   // Quiet hours do not silence VIP senders unless you say so.
   quietHours: { enabled: false, start: '22:00', end: '07:00' },
-  callVipDuringQuietHours: true,
+  alertVipDuringQuietHours: true,
 
-  // Voice.
-  voiceId: env.eleven.voiceId,
-  modelId: env.eleven.modelId,
-  previewAudio: true,
-  // subject = sender + subject only (default), brief = + one line of preview,
-  // detailed = + preview and why it was flagged.
-  scriptStyle: 'subject',
+  // The web call.
+  scriptStyle: 'brief', // subject | brief | detailed
+  notifyPush: true,
+  ringtone: true,
+  speakOnAnswer: true,
 };
 
-export const SETUP = {
-  googleConfigured: Boolean(env.google.clientId && env.google.clientSecret),
-  voiceConfigured: Boolean(env.eleven.apiKey),
-  elevenAgentConfigured: Boolean(env.eleven.agentId && env.eleven.agentPhoneNumberId),
-  twilioConfigured: Boolean(env.twilio.accountSid && env.twilio.authToken && env.twilio.fromNumber),
-  publicUrlIsLocal: /^https?:\/\/(127\.0\.0\.1|localhost)/i.test(env.publicBaseUrl),
-};
+export function deriveSetup() {
+  return {
+    google: Boolean(env.google.clientId && env.google.clientSecret),
+    voice: Boolean(env.tts.elevenApiKey) || env.tts.provider !== 'elevenlabs',
+    elevenLabs: Boolean(env.tts.elevenApiKey),
+    edgeTts: env.tts.provider !== 'elevenlabs',
+    push: true,
+    storage: env.redis.url && env.redis.token ? 'redis' : 'file',
+    appPassword: Boolean(env.appPassword),
+    cron: Boolean(env.cronSecret),
+    selfPoll: env.selfPoll,
+    publicBaseUrl: env.publicBaseUrl || null,
+    publicUrlIsLocal: !env.publicBaseUrl || /^https?:\/\/(127\.0\.0\.1|localhost)/i.test(env.publicBaseUrl),
+  };
+}
+
+export const SETUP = deriveSetup();

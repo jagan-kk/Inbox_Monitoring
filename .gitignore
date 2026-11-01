@@ -4,3 +4,8 @@ data/
 *.log
 .DS_Store
 Thumbs.db
+
+.vercel
+.tmp
+
+tools/cloudflared.exe

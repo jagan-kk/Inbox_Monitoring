@@ -1,0 +1,52 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Deploy: Render -> New -> Blueprint -> pick this repo.
+# Fill in the `sync: false` secrets in the dashboard after the first deploy.
+#
+# The free plan sleeps after ~15 minutes idle, so SELF_POLL is off and an
+# external cron (GitHub Actions or cron-job.org) pings /api/cron/scan.
+services:
+  - type: web
+    name: ricky
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: HOST
+        value: 0.0.0.0
+      - key: SELF_POLL
+        value: "0"
+      - key: TTS_PROVIDER
+        value: auto
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: APP_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        value: 21m00Tcm4TlvDq8ikWAM
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: CRON_SECRET
+        sync: false

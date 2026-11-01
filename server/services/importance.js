@@ -8,10 +8,32 @@ const URGENT_PATTERNS = [
   [/action required|response required|needs? your (input|approval|attention)|please (review|sign|confirm)|signature required/i, 'needs your action', 16],
   [/deadline|due (today|tomorrow|by)|final notice|last chance|overdue|expires? (today|soon)/i, 'mentions a deadline', 16],
   [/payment failed|invoice|past due|wire transfer|refund|billing issue|failed charge/i, 'is about money or billing', 15],
-  [/security alert|unauthorized|suspicious (login|activity)|password|verify your|two[- ]factor|breach/i, 'looks like a security alert', 16],
   [/offer letter|contract|interview|termination|resignation|legal notice/i, 'may affect your work or contract', 15],
   [/production|outage|server down|incident|build failed|deploy failed/i, 'looks like an operational alert', 14],
   [/admission|tuition|scholarship|exam|transcript|enrollment/i, 'is about school or enrollment', 11],
+];
+
+/**
+ * Account security is its own lane. These emails almost always come from a
+ * `no-reply@` address and look "automated", which used to knock them back
+ * below the call threshold — the exact alert you least want to miss.
+ */
+const SECURITY_PATTERN =
+  /security alert|unauthorized|suspicious (log-?in|activity|sign-?in)|unusual activity|new sign-?in|sign-?in attempt|did you (just )?(sign|log) in|password (was )?(changed|reset)|two[- ](factor|step)|2fa|verification code|one[- ]time (code|password)|account (recovery|recovered|locked|disabled|suspended)|account (notice|warning)|recovered successfully|breach/i;
+
+/** Big providers whose security notices are reliably real. */
+const TRUSTED_SECURITY_DOMAINS = [
+  'google.com',
+  'accounts.google.com',
+  'microsoft.com',
+  'apple.com',
+  'amazon.com',
+  'paypal.com',
+  'github.com',
+  'dropbox.com',
+  'linkedin.com',
+  'facebookmail.com',
+  'x.com',
 ];
 
 const LOW_PRIORITY_PATTERNS = [
@@ -52,6 +74,19 @@ export function scoreEmail(email, settings) {
   const isVip = Boolean(vipRule);
   if (isVip) add(45, `comes from a VIP sender (${vipRule})`);
 
+  // A security notice is urgent on its own, and never penalised for being
+  // automated. It should clear the threshold even from a no-reply address.
+  const isSecurityNotice = SECURITY_PATTERN.test(subjectAndBody);
+  const senderDomain = normaliseAddress(email.from?.email).split('@')[1] || '';
+  const trustedSender = TRUSTED_SECURITY_DOMAINS.some(
+    (domain) => senderDomain === domain || senderDomain.endsWith(`.${domain}`)
+  );
+
+  if (isSecurityNotice) {
+    add(44, 'looks like a security alert');
+    if (trustedSender) add(8, 'comes from a major account provider');
+  }
+
   let matched = 0;
   for (const [pattern, label, points] of URGENT_PATTERNS) {
     if (pattern.test(subjectAndBody)) {
@@ -82,11 +117,14 @@ export function scoreEmail(email, settings) {
   }
   if ((email.labels || []).includes('STARRED')) add(8, 'was starred by you');
   if (email.isNewsletter) {
-    add(-35, 'looks like a newsletter');
-  } else if (LOW_PRIORITY_PATTERNS.some(([pattern]) => pattern.test(`${email.subject}\n${email.snippet}`))) {
+    if (!isSecurityNotice) add(-35, 'looks like a newsletter');
+  } else if (
+    !isSecurityNotice &&
+    LOW_PRIORITY_PATTERNS.some(([pattern]) => pattern.test(`${email.subject}\n${email.snippet}`))
+  ) {
     add(-16, 'looks automated or promotional');
   }
-  if (email.isAutomated && !isVip) add(-10, 'automated no-reply sender');
+  if (email.isAutomated && !isVip && !isSecurityNotice) add(-10, 'automated no-reply sender');
   if (/[!]{2,}|\b[A-Z]{6,}\b/.test(email.subject)) add(4, 'has a shouty subject line');
   if (Date.now() - email.receivedAt < 30 * 60_000) add(5, 'arrived in the last 30 minutes');
 

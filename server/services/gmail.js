@@ -22,11 +22,11 @@ export function connectedEmail() {
   return tokenStore.data?.email || null;
 }
 
-export function buildAuthUrl(state = crypto.randomUUID()) {
+export function buildAuthUrl(state = crypto.randomUUID(), redirectUri = env.google.redirectUri) {
   if (!isConfigured()) throw new Error('Google OAuth client is not configured.');
   const url = new URL(AUTH_URL);
   url.searchParams.set('client_id', env.google.clientId);
-  url.searchParams.set('redirect_uri', env.google.redirectUri);
+  url.searchParams.set('redirect_uri', redirectUri);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('scope', SCOPES.join(' '));
   url.searchParams.set('access_type', 'offline');
@@ -36,12 +36,12 @@ export function buildAuthUrl(state = crypto.randomUUID()) {
   return url.toString();
 }
 
-export async function handleCallback(code) {
+export async function handleCallback(code, redirectUri = env.google.redirectUri) {
   const body = new URLSearchParams({
     code,
     client_id: env.google.clientId,
     client_secret: env.google.clientSecret,
-    redirect_uri: env.google.redirectUri,
+    redirect_uri: redirectUri,
     grant_type: 'authorization_code',
   });
 

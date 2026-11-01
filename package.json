@@ -1,20 +1,24 @@
 {
   "name": "ricky",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Private voice-messaging app: watches Gmail and calls you when something important lands.",
+  "description": "Private inbox watchdog: watches Gmail and rings your phone with a free web call and a spoken voice note.",
   "type": "module",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "test": "node --test server/tests/*.test.js"
+    "test": "node --test server/tests/*.test.js",
+    "icons": "node tools/make-icons.mjs",
+    "vapid": "node tools/vapid.mjs"
   },
   "engines": {
     "node": ">=20.11"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "msedge-tts": "^2.1.1",
+    "web-push": "^3.6.7"
   }
 }
