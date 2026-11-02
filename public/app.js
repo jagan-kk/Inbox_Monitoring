@@ -27,7 +27,7 @@ const VIEW_COPY = {
   inbox: ['Inbox', 'Every email Ricky scored, and why.'],
   calls: ['Calls', 'Each call Ricky made, and the voice he used.'],
   settings: ['Settings', 'Tune what is important and how Ricky reaches you.'],
-  setup: ['Setup', 'Gmail, calls on this phone, and this deployment.'],
+  setup: ['Setup', 'Gmail and calls on this phone.'],
 };
 
 const TTS_LABEL = { elevenlabs: 'ElevenLabs', edge: 'Edge neural' };
@@ -132,7 +132,6 @@ function render() {
   renderInbox();
   renderCalls();
   renderChecklist();
-  renderFacts();
   renderPushUI();
   renderProfile();
   if (!state.settingsDirty && state.settings) fillSettings(state.settings);
@@ -377,23 +376,6 @@ function renderChecklist() {
 
   $('#voice-pill').textContent = TTS_LABEL[status.ttsProvider] || 'auto';
   $('#voice-pill').className = `pill ${setup.elevenLabs ? 'ok' : ''}`;
-}
-
-function renderFacts() {
-  const status = state.status || {};
-  const setup = status.setup || {};
-  const facts = [
-    ['Storage', setup.storage === 'redis' ? 'Upstash Redis' : 'local files'],
-    ['Hosting', state.status?.server?.serverless ? 'serverless' : 'long running'],
-    ['Voice', TTS_LABEL[status.ttsProvider] || 'auto'],
-    ['Phones', String(status.push?.devices ?? 0)],
-    ['Public URL', setup.publicBaseUrl || 'localhost only'],
-    ['Scheduler', setup.selfPoll ? 'built in' : setup.cron ? 'external cron' : 'none'],
-  ];
-
-  $('#facts').innerHTML = facts
-    .map(([key, value]) => `<dt>${esc(key)}</dt><dd title="${esc(value)}">${esc(value)}</dd>`)
-    .join('');
 }
 
 async function renderProfile() {

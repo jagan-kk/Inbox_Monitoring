@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Ricky — voice alerts for important email</title>
     <meta name="description" content="A private app that watches Gmail and calls your phone when something important lands." />
-    <meta name="theme-color" content="#070a0e" />
+    <meta name="theme-color" content="#fdfaf5" />
     <meta name="color-scheme" content="dark" />
 
     <meta name="mobile-web-app-capable" content="yes" />
@@ -332,39 +332,6 @@
             <audio id="preview-audio" controls hidden></audio>
           </section>
 
-          <section class="card">
-            <div class="card-head"><h2>This deployment</h2></div>
-            <dl class="facts" id="facts"></dl>
-          </section>
-
-          <section class="card">
-            <div class="card-head">
-              <h2>Environment</h2>
-              <button class="link" data-copy="#env-sample" type="button">Copy</button>
-            </div>
-            <p class="muted">Set these on Render / Vercel, or in <code>.env</code> locally.</p>
-            <pre class="code" id="env-sample">APP_PASSWORD=choose-a-long-password
-PUBLIC_BASE_URL=https://your-app.onrender.com
-
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-GOOGLE_REDIRECT_URI=https://your-app.onrender.com/oauth2callback
-
-# Voice: ElevenLabs free tier, with free Edge fallback
-ELEVENLABS_API_KEY=sk_...
-ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
-
-# Free push for the web call
-VAPID_PUBLIC_KEY=...
-VAPID_PRIVATE_KEY=...
-
-# Survives restarts on Render/Vercel (free Upstash Redis)
-UPSTASH_REDIS_REST_URL=https://...
-UPSTASH_REDIS_REST_TOKEN=...
-
-# Lets a free scheduler ping /api/cron/scan
-CRON_SECRET=another-long-secret</pre>
-          </section>
         </section>
       </main>
 

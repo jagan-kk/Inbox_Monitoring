@@ -67,11 +67,12 @@ function isAuthed(req) {
   return users.some((u) => u.sessionToken === value && u.sessionExpires && Date.now() < u.sessionExpires);
 }
 
-export const cookieOptions = (req) => ({
+export const cookieOptions = (req, remember = false) => ({
   httpOnly: true,
   sameSite: 'lax',
   path: '/',
-  maxAge: 1000 * 60 * 60 * 24 * 30,
+  // Remember me checked -> 30 days; unchecked -> session cookie (browser close)
+  maxAge: remember ? 1000 * 60 * 60 * 24 * 30 : undefined,
   secure: req.secure || env.publicBaseUrl.startsWith('https'),
 });
 
@@ -128,18 +129,18 @@ function loginPage({ mode = 'login', next = '/', error = '', usersExist = false 
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Ricky - ${title}</title>
-<meta name="theme-color" content="#070a0e" />
+<meta name="theme-color" content="#fdfaf5" />
 <link rel="icon" href="/icons/favicon.svg" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 <link rel="manifest" href="/manifest.webmanifest" />
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: light; }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body {
     margin: 0; min-height: 100dvh;
     font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-    background: #070a0e; color: #e8eef6;
+    background: #fdfaf5; color: #0f172a;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -148,10 +149,11 @@ function loginPage({ mode = 'login', next = '/', error = '', usersExist = false 
     display: grid;
     grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
     min-height: 100dvh;
+    position: relative;
   }
 
   /* ---------- left: video panel ---------- */
-  .visual { position: relative; overflow: hidden; background: #070a0e; isolation: isolate; }
+  .visual { position: relative; overflow: hidden; background: #fdfaf5; isolation: isolate; }
   .visual video {
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: cover; object-position: 50% 42%;
@@ -168,12 +170,12 @@ function loginPage({ mode = 'login', next = '/', error = '', usersExist = false 
   }
   .visual-fallback::before {
     width: 70%; aspect-ratio: 1; left: -18%; top: -12%;
-    background: radial-gradient(circle, rgba(76,221,134,.5), transparent 65%);
+    background: radial-gradient(circle, rgba(244,114,82,.45), transparent 65%);
     animation: drift 16s ease-in-out infinite alternate;
   }
   .visual-fallback::after {
     width: 75%; aspect-ratio: 1; right: -22%; bottom: -18%;
-    background: radial-gradient(circle, rgba(108,199,255,.4), transparent 65%);
+    background: radial-gradient(circle, rgba(244,114,82,.3), transparent 65%);
     animation: drift 20s ease-in-out infinite alternate-reverse;
   }
   @keyframes drift {
@@ -184,7 +186,7 @@ function loginPage({ mode = 'login', next = '/', error = '', usersExist = false 
   .visual-rings { position: absolute; inset: 0; display: grid; place-items: center; }
   .visual-rings span {
     position: absolute; width: 190px; height: 190px; border-radius: 50%;
-    border: 1px solid rgba(124,243,160,.26);
+    border: 1px solid rgba(244,114,82,.18);
     animation: ripple 5s ease-out infinite;
   }
   .visual-rings span:nth-child(2) { animation-delay: 1.6s; }
@@ -198,9 +200,19 @@ function loginPage({ mode = 'login', next = '/', error = '', usersExist = false 
   .visual-scrim {
     position: absolute; inset: 0; pointer-events: none;
     background:
-      /* Long cross-fade into the flat page colour: no visible seam */
-      linear-gradient(90deg, rgba(7,10,14,0) 8%, rgba(7,10,14,.04) 28%, rgba(7,10,14,.16) 45%, rgba(7,10,14,.38) 60%, rgba(7,10,14,.64) 74%, rgba(7,10,14,.87) 88%, #070a0e 100%),
-      linear-gradient(180deg, rgba(5,8,11,.5) 0%, rgba(5,8,11,0) 30%, rgba(5,8,11,.72) 100%);
+      /* Long cross-fade into the black panel colour: no visible seam */
+      linear-gradient(90deg, rgba(15,23,42,0) 0%, rgba(15,23,42,.08) 20%, rgba(15,23,42,.25) 45%, rgba(15,23,42,.5) 70%, rgba(15,23,42,.82) 90%, #000000 100%),
+      linear-gradient(180deg, rgba(15,23,42,.5) 0%, rgba(15,23,42,0) 30%, rgba(15,23,42,.72) 100%);
+  }
+
+  /* Soft vertical band at the column boundary (~54% where the grid splits)
+     that blends video into the black panel so there is no visible cut. */
+  .visual-seam {
+    position: absolute; top: 0; bottom: 0;
+    left: 54%; transform: translateX(-50%);
+    width: clamp(200px, 15vw, 280px);
+    pointer-events: none; z-index: 6;
+    background: linear-gradient(90deg, transparent 0%, rgba(0,0,0,.45) 50%, transparent 100%);
   }
 
   .visual-copy {
@@ -208,16 +220,16 @@ function loginPage({ mode = 'login', next = '/', error = '', usersExist = false 
     padding: clamp(24px, 4.2vw, 60px); max-width: 660px;
   }
   .brand { display: flex; align-items: center; gap: 12px; font-size: 17px; font-weight: 700; letter-spacing: -.2px; }
-  .brand .mark { width: 34px; height: 34px; border-radius: 10px; font-size: 16px; box-shadow: 0 8px 22px rgba(76,221,134,.24); }
+  .brand .mark { width: 34px; height: 34px; border-radius: 10px; font-size: 16px; box-shadow: 0 8px 22px rgba(244,114,82,.24); }
   .visual-copy h2 {
     margin: 26px 0 12px; font-size: clamp(28px, 3.4vw, 44px);
-    line-height: 1.06; letter-spacing: -1.2px; font-weight: 700;
+    line-height: 1.06; letter-spacing: -1.2px; font-weight: 700; color: #fdfaf5;
   }
-  .visual-copy p { margin: 0; max-width: 44ch; color: #b7c4d4; font-size: 15.5px; line-height: 1.55; }
+  .visual-copy p { margin: 0; max-width: 44ch; color: #6b7280; font-size: 15.5px; line-height: 1.55; }
   .visual-points { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 0; padding: 0; list-style: none; }
   .visual-points li {
-    font-size: 12.5px; color: #cfe0d6; padding: 7px 12px; border-radius: 999px;
-    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+    font-size: 12.5px; color: #0f172a; padding: 7px 12px; border-radius: 999px;
+    background: rgba(15,23,42,.06); border: 1px solid rgba(15,23,42,.1);
     backdrop-filter: blur(6px);
   }
 
@@ -226,62 +238,61 @@ function loginPage({ mode = 'login', next = '/', error = '', usersExist = false 
     display: flex; align-items: center; justify-content: center;
     padding: clamp(24px, 4vw, 56px);
     background:
-      /* Keep the left edge perfectly flat so the video fade lands on an
-         identical colour (no visible seam at the column boundary). */
-      linear-gradient(90deg, #070a0e 0%, #070a0e 14%, rgba(7,10,14,0) 46%),
-      radial-gradient(760px 460px at 100% 0%, rgba(124,243,160,.07), transparent 60%),
-      radial-gradient(620px 420px at 70% 100%, rgba(108,199,255,.06), transparent 60%),
-      #070a0e;
+      /* Panel edge fades in gradually so it meets the video fade without a hard line */
+      linear-gradient(90deg, transparent 0%, rgba(15,23,42,.08) 25%, rgba(15,23,42,.25) 55%, rgba(15,23,42,.5) 80%, #000000 100%),
+      radial-gradient(760px 460px at 100% 0%, rgba(244,114,82,.07), transparent 60%),
+      radial-gradient(620px 420px at 70% 100%, rgba(244,114,82,.04), transparent 60%),
+      #000000;
   }
   .card {
     width: 100%; max-width: 392px; padding: 30px 26px;
-    background: linear-gradient(180deg, rgba(16,24,33,.92), rgba(11,17,24,.94));
-    border: 1px solid rgba(255,255,255,.08); border-radius: 20px;
+    background: linear-gradient(180deg, #0f172a, #1e293b);
+    border: 1px solid rgba(255,255,255,.12); border-radius: 20px;
     box-shadow: 0 30px 80px rgba(0,0,0,.45);
   }
   .mark {
     width: 52px; height: 52px; border-radius: 15px; display: grid; place-items: center;
-    font-weight: 800; font-size: 24px; color: #04120a;
-    background: linear-gradient(140deg, #b6ffcb, #4bdd86);
-    box-shadow: 0 12px 30px rgba(76,221,134,.28);
+    font-weight: 800; font-size: 24px; color: #fdfaf5;
+    background: linear-gradient(140deg, #ff8a6b, #ff6b4a);
+    box-shadow: 0 12px 30px rgba(244,114,82,.28);
   }
-  h1 { font-size: 22px; margin: 18px 0 6px; letter-spacing: -.2px; }
-  p { margin: 0 0 20px; color: #8b9bb0; font-size: 14px; line-height: 1.5; }
-  label { display: block; font-size: 12.5px; color: #8b9bb0; margin-bottom: 8px; letter-spacing: .3px; }
+  h1 { font-size: 22px; margin: 18px 0 6px; letter-spacing: -.2px; color: #fdfaf5; }
+  p { margin: 0 0 20px; color: #e8eef6; font-size: 14px; line-height: 1.5; }
+  label { display: block; font-size: 12.5px; color: #e8eef6; margin-bottom: 8px; letter-spacing: .3px; font-weight: 600; }
   input {
     width: 100%; padding: 14px 15px; font-size: 16px; border-radius: 13px;
-    border: 1px solid rgba(255,255,255,.12); background: #0a1017; color: #e8eef6;
+    border: 1px solid rgba(255,255,255,.12); background: #0a1017; color: #fdfaf5;
     outline: none; transition: border-color .15s, box-shadow .15s;
   }
-  input:focus { border-color: rgba(124,243,160,.55); box-shadow: 0 0 0 4px rgba(124,243,160,.12); }
+  input:focus { border-color: rgba(244,114,82,.55); box-shadow: 0 0 0 4px rgba(244,114,82,.12); }
   button {
     width: 100%; margin-top: 16px; padding: 14px 16px; font-size: 15px; font-weight: 650;
-    border: 0; border-radius: 13px; cursor: pointer; color: #04120a;
-    background: linear-gradient(140deg, #b6ffcb, #4bdd86);
-    box-shadow: 0 12px 26px rgba(76,221,134,.22);
+    border: 0; border-radius: 13px; cursor: pointer; color: #fdfaf5;
+    background: linear-gradient(140deg, #ff8a6b, #ff6b4a);
+    box-shadow: 0 12px 26px rgba(244,114,82,.22);
   }
   button:active { transform: translateY(1px); }
   button.ghost {
-    background: transparent; color: #8b9bb0; box-shadow: none; border: 1px solid rgba(255,255,255,.08);
+    background: transparent; color: #e8eef6; box-shadow: none; border: 1px solid rgba(255,255,255,.12);
   }
-  button.ghost:hover { background: rgba(255,255,255,.03); }
+  button.ghost:hover { background: rgba(255,255,255,.05); }
   .error {
     margin: 0 0 16px; padding: 11px 13px; border-radius: 11px; font-size: 13px;
-    color: #ffb4b4; background: rgba(255,122,122,.12); border: 1px solid rgba(255,122,122,.25);
+    color: #ff6b4a; background: rgba(244,114,82,.1); border: 1px solid rgba(244,114,82,.2);
   }
-  .toggle { margin-top: 16px; font-size: 13px; color: #8b9bb0; text-align: center; }
-  .toggle a { color: #7cf3a0; text-decoration: none; cursor: pointer; }
+  .toggle { margin-top: 16px; font-size: 13px; color: #e8eef6; text-align: center; }
+  .toggle a { color: #ff6b4a; text-decoration: none; cursor: pointer; font-weight: 600; }
   .toggle a:hover { text-decoration: underline; }
-  .or { margin: 20px 0 12px; font-size: 11px; color: #5c6b7e; text-align: center; letter-spacing: .4px; text-transform: uppercase; }
+  .or { margin: 20px 0 12px; font-size: 11px; color: #e8eef6; text-align: center; letter-spacing: .4px; text-transform: uppercase; font-weight: 600; }
   .google-btn {
     width: 100%; margin-top: 0; padding: 12px 16px; font-size: 14px; font-weight: 600;
-    border: 1px solid rgba(255,255,255,.12); border-radius: 13px; cursor: pointer; color: #e8eef6;
-    background: #0a1017; display: flex; align-items: center; justify-content: center; gap: 8px;
+    border: 1px solid rgba(255,255,255,.2); border-radius: 13px; cursor: pointer; color: #fdfaf5;
+    background: #0f172a; display: flex; align-items: center; justify-content: center; gap: 8px;
   }
-  .google-btn:hover { background: #101821; border-color: rgba(255,255,255,.2); }
+  .google-btn:hover { background: #1e293b; border-color: rgba(255,255,255,.3); }
   .google-btn:active { transform: translateY(1px); }
   .google-btn:disabled { opacity: .6; cursor: not-allowed; }
-  .foot { margin-top: 18px; font-size: 12px; color: #5c6b7e; text-align: center; }
+  .foot { margin-top: 18px; font-size: 12px; color: #e8eef6; text-align: center; }
   @media (prefers-reduced-motion: no-preference) { .card { animation: rise .35s ease-out; } }
   @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
@@ -291,11 +302,11 @@ function loginPage({ mode = 'login', next = '/', error = '', usersExist = false 
     .visual { height: clamp(210px, 34dvh, 300px); }
     .visual-scrim {
       background:
-        linear-gradient(180deg, rgba(5,8,11,.05) 0%, rgba(5,8,11,.18) 34%, rgba(7,10,14,.55) 58%, rgba(7,10,14,.82) 74%, #070a0e 86%, #070a0e 100%),
-        linear-gradient(90deg, rgba(5,8,11,.5) 0%, rgba(5,8,11,.12) 70%, rgba(5,8,11,0) 100%);
+        linear-gradient(180deg, rgba(15,23,42,.05) 0%, rgba(15,23,42,.18) 34%, rgba(15,23,42,.55) 58%, rgba(15,23,42,.82) 74%, #000000 86%, #000000 100%),
+        linear-gradient(90deg, rgba(15,23,42,.5) 0%, rgba(15,23,42,.12) 70%, rgba(15,23,42,0) 100%);
     }
-    .brand { text-shadow: 0 2px 14px rgba(0,0,0,.6); }
-    .visual-copy h2 { text-shadow: 0 2px 18px rgba(0,0,0,.55); }
+    .brand { text-shadow: 0 2px 14px rgba(15,23,42,.4); }
+    .visual-copy h2 { text-shadow: 0 2px 18px rgba(15,23,42,.35); color: #fdfaf5; }
     .visual-copy { padding: 18px 22px 46px; }
     .visual-copy h2 { margin: 14px 0 0; font-size: 22px; letter-spacing: -.5px; }
     .visual-copy p, .visual-points { display: none; }
@@ -314,9 +325,11 @@ function loginPage({ mode = 'login', next = '/', error = '', usersExist = false 
       align-items: flex-start;
       padding: 26px 16px calc(32px + env(safe-area-inset-bottom));
       background:
-        radial-gradient(560px 420px at 100% 100%, rgba(124,243,160,.05), transparent 65%),
-        #070a0e;
+        radial-gradient(560px 420px at 100% 100%, rgba(244,114,82,.05), transparent 65%),
+        #000000;
     }
+    /* No side-by-side seam on phones — column layout has no vertical boundary */
+    .visual-seam { display: none; }
     .card { max-width: 480px; margin: 0 auto; padding: 24px 20px; border-radius: 18px; }
   }
 
@@ -381,7 +394,6 @@ function loginPage({ mode = 'login', next = '/', error = '', usersExist = false 
           <span>Ricky</span>
         </div>
         <h2>When it matters,<br />your inbox calls you.</h2>
-        <p>An important email arrives. Your phone rings, and Ricky reads it out loud — like a call, not another notification.</p>
         <ul class="visual-points">
           <li>Security alerts</li>
           <li>Interviews</li>
@@ -390,6 +402,9 @@ function loginPage({ mode = 'login', next = '/', error = '', usersExist = false 
         </ul>
       </div>
     </section>
+
+    <!-- Blend seam across the center boundary so video fades into black panel -->
+    <div class="visual-seam" aria-hidden="true"></div>
 
     <!-- RIGHT: sign in / sign up -->
     <section class="panel">
@@ -421,7 +436,12 @@ function loginPage({ mode = 'login', next = '/', error = '', usersExist = false 
       Sign in with Google
     </button>
     ` : ''}
-    <div class="foot">This device stays signed in for 30 days.</div>
+    <div class="remember">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);cursor:pointer;">
+        <input type="checkbox" name="remember" style="width:16px;height:16px;accent-color:var(--accent);" />
+        Remember me
+      </label>
+    </div>
   </form>
     </section>
   </main>
@@ -562,12 +582,13 @@ authRouter.post('/login', async (req, res) => {
     userStore.save();
 
     const token = sessionToken(userId);
+    const remember = Boolean(req.body.remember);
     const sessionExpires = Date.now() + 1000 * 60 * 60 * 24 * 30;
     user.sessionToken = token;
     user.sessionExpires = sessionExpires;
     userStore.save();
 
-    res.cookie(COOKIE, token, cookieOptions(req));
+    res.cookie(COOKIE, token, cookieOptions(req, remember));
     return res.redirect(next);
   }
 
@@ -587,12 +608,13 @@ authRouter.post('/login', async (req, res) => {
   }
 
   const token = sessionToken(user.id);
+  const remember = Boolean(req.body.remember);
   const sessionExpires = Date.now() + 1000 * 60 * 60 * 24 * 30;
   user.sessionToken = token;
   user.sessionExpires = sessionExpires;
   userStore.save();
 
-  res.cookie(COOKIE, token, cookieOptions(req));
+  res.cookie(COOKIE, token, cookieOptions(req, remember));
   res.redirect(next);
 });
 
