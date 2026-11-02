@@ -224,8 +224,9 @@ public/
   sw.js                  service worker: push -> ring, offline cache
   manifest.webmanifest   PWA metadata
   icons/                 generated app icons
+  media/                 sign-in page video (login.mp4 + poster)
 api/index.js             Vercel serverless entry
-tools/                   icon generator, VAPID generator, TTS smoke test
+tools/                   icon + login video generators, VAPID, layout audits
 legacy-dashboard/        the original desktop dashboard (not served)
 ```
 

@@ -34,9 +34,6 @@ export const env = {
   isServerless,
   /** In-process polling works on a long-running host. Serverless needs a cron ping. */
   selfPoll: bool(process.env.SELF_POLL, !isServerless),
-
-  // Access control. Strongly recommended whenever the app is reachable publicly.
-  appPassword: str(process.env.APP_PASSWORD),
   sessionSecret: str(process.env.SESSION_SECRET),
   cronSecret: str(process.env.CRON_SECRET),
 
@@ -46,6 +43,10 @@ export const env = {
     // Optional. When empty the redirect URI is derived from the incoming request.
     redirectUri: str(process.env.GOOGLE_REDIRECT_URI),
   },
+
+  // Optional video shown on the left half of the sign-in page.
+  // Defaults to /media/login.mp4 (drop your own file there).
+  loginVideo: str(process.env.LOGIN_VIDEO_URL),
 
   // Voice generation. `auto` prefers ElevenLabs (free tier) and falls back to
   // Microsoft Edge's free neural voices when there is no key or a quota error.
@@ -122,7 +123,6 @@ export function deriveSetup() {
     edgeTts: env.tts.provider !== 'elevenlabs',
     push: true,
     storage: env.redis.url && env.redis.token ? 'redis' : 'file',
-    appPassword: Boolean(env.appPassword),
     cron: Boolean(env.cronSecret),
     selfPoll: env.selfPoll,
     publicBaseUrl: env.publicBaseUrl || null,

@@ -4,8 +4,7 @@ import { env } from './config.js';
 import { userStore } from './store.js';
 
 export const COOKIE = 'ricky_session';
-const secret = env.sessionSecret || env.appPassword || 'ricky-default-secret-change-me';
-const APP_PASSWORD = env.appPassword;
+const secret = env.sessionSecret || 'ricky-default-secret-change-me';
 
 const SALT_LENGTH = 16;
 const KEY_LENGTH = 64;
@@ -61,13 +60,6 @@ export function findUserByEmail(email) {
 }
 
 function isAuthed(req) {
-  // APP_PASSWORD bypass (legacy single-password mode)
-  if (APP_PASSWORD) {
-    const value = parseCookies(req.headers.cookie)[COOKIE];
-    const expected = crypto.createHmac('sha256', secret).update('app-password-v1').digest('hex');
-    if (value && safeEqual(value, expected)) return true;
-  }
-
   // Per-user session cookie
   const value = parseCookies(req.headers.cookie)[COOKIE];
   if (!value) return false;
@@ -98,12 +90,13 @@ const OPEN = [
   /^\/manifest\.webmanifest$/,
   /^\/sw\.js$/,
   /^\/icons\//,
+  /^\/media\//,
   /^\/styles\.css$/,
   /^\/app\.js$/,
   /^\/favicon/,
 ];
 
-export const authRequired = Boolean(APP_PASSWORD || (userStore.data && userStore.data.length > 0));
+export const authRequired = Boolean(userStore.data && userStore.data.length > 0);
 
 export function authMiddleware() {
   return (req, res, next) => {
@@ -126,10 +119,8 @@ function loginPage({ mode = 'login', next = '/', error = '', usersExist = false 
     ? 'Set your email and password to access your call app.'
     : 'Enter your email and password to open your call app.';
   const submitLabel = showRegister ? 'Create account' : 'Sign in';
-  const toggleText = showRegister
-    ? 'Already have an account? Sign in'
-    : "Don't have an account? Create one";
-  const toggleAction = showRegister ? 'login' : 'register';
+  const toggleText = showRegister ? 'Already have an account?' : "Don't have an account?";
+  const toggleAction = showRegister ? 'Sign in' : 'Create one';
 
   return `<!doctype html>
 <html lang="en">
@@ -146,19 +137,107 @@ function loginPage({ mode = 'login', next = '/', error = '', usersExist = false 
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body {
-    margin: 0; display: grid; place-items: center; padding: 24px;
+    margin: 0; min-height: 100dvh;
     font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: #070a0e; color: #e8eef6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- split shell ---------- */
+  .split {
+    display: grid;
+    grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+    min-height: 100dvh;
+  }
+
+  /* ---------- left: video panel ---------- */
+  .visual { position: relative; overflow: hidden; background: #070a0e; isolation: isolate; }
+  .visual video {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; object-position: 50% 42%;
+  }
+  .visual.has-video video { opacity: 1; }
+  .visual.no-video video { display: none; }
+
+  /* Ambient fallback shown until (or instead of) the video */
+  .visual-fallback { position: absolute; inset: 0; transition: opacity .8s ease; }
+  .visual.has-video .visual-fallback { opacity: 0; }
+  .visual-fallback::before,
+  .visual-fallback::after {
+    content: ""; position: absolute; border-radius: 50%; filter: blur(60px);
+  }
+  .visual-fallback::before {
+    width: 70%; aspect-ratio: 1; left: -18%; top: -12%;
+    background: radial-gradient(circle, rgba(76,221,134,.5), transparent 65%);
+    animation: drift 16s ease-in-out infinite alternate;
+  }
+  .visual-fallback::after {
+    width: 75%; aspect-ratio: 1; right: -22%; bottom: -18%;
+    background: radial-gradient(circle, rgba(108,199,255,.4), transparent 65%);
+    animation: drift 20s ease-in-out infinite alternate-reverse;
+  }
+  @keyframes drift {
+    from { transform: translate3d(0, 0, 0) scale(1); }
+    to { transform: translate3d(6%, 8%, 0) scale(1.16); }
+  }
+
+  .visual-rings { position: absolute; inset: 0; display: grid; place-items: center; }
+  .visual-rings span {
+    position: absolute; width: 190px; height: 190px; border-radius: 50%;
+    border: 1px solid rgba(124,243,160,.26);
+    animation: ripple 5s ease-out infinite;
+  }
+  .visual-rings span:nth-child(2) { animation-delay: 1.6s; }
+  .visual-rings span:nth-child(3) { animation-delay: 3.2s; }
+  @keyframes ripple {
+    0% { transform: scale(.5); opacity: 0; }
+    22% { opacity: .9; }
+    100% { transform: scale(2.5); opacity: 0; }
+  }
+
+  .visual-scrim {
+    position: absolute; inset: 0; pointer-events: none;
     background:
-      radial-gradient(900px 520px at 10% -10%, rgba(124,243,160,.12), transparent 60%),
-      radial-gradient(700px 420px at 100% 0%, rgba(108,199,255,.10), transparent 55%),
+      /* Long cross-fade into the flat page colour: no visible seam */
+      linear-gradient(90deg, rgba(7,10,14,0) 8%, rgba(7,10,14,.04) 28%, rgba(7,10,14,.16) 45%, rgba(7,10,14,.38) 60%, rgba(7,10,14,.64) 74%, rgba(7,10,14,.87) 88%, #070a0e 100%),
+      linear-gradient(180deg, rgba(5,8,11,.5) 0%, rgba(5,8,11,0) 30%, rgba(5,8,11,.72) 100%);
+  }
+
+  .visual-copy {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: clamp(24px, 4.2vw, 60px); max-width: 660px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; font-size: 17px; font-weight: 700; letter-spacing: -.2px; }
+  .brand .mark { width: 34px; height: 34px; border-radius: 10px; font-size: 16px; box-shadow: 0 8px 22px rgba(76,221,134,.24); }
+  .visual-copy h2 {
+    margin: 26px 0 12px; font-size: clamp(28px, 3.4vw, 44px);
+    line-height: 1.06; letter-spacing: -1.2px; font-weight: 700;
+  }
+  .visual-copy p { margin: 0; max-width: 44ch; color: #b7c4d4; font-size: 15.5px; line-height: 1.55; }
+  .visual-points { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 0; padding: 0; list-style: none; }
+  .visual-points li {
+    font-size: 12.5px; color: #cfe0d6; padding: 7px 12px; border-radius: 999px;
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+    backdrop-filter: blur(6px);
+  }
+
+  /* ---------- right: form panel ---------- */
+  .panel {
+    display: flex; align-items: center; justify-content: center;
+    padding: clamp(24px, 4vw, 56px);
+    background:
+      /* Keep the left edge perfectly flat so the video fade lands on an
+         identical colour (no visible seam at the column boundary). */
+      linear-gradient(90deg, #070a0e 0%, #070a0e 14%, rgba(7,10,14,0) 46%),
+      radial-gradient(760px 460px at 100% 0%, rgba(124,243,160,.07), transparent 60%),
+      radial-gradient(620px 420px at 70% 100%, rgba(108,199,255,.06), transparent 60%),
       #070a0e;
-    color: #e8eef6;
   }
   .card {
-    width: 100%; max-width: 380px; padding: 28px 24px;
-    background: linear-gradient(180deg, #101821, #0b1118);
+    width: 100%; max-width: 392px; padding: 30px 26px;
+    background: linear-gradient(180deg, rgba(16,24,33,.92), rgba(11,17,24,.94));
     border: 1px solid rgba(255,255,255,.08); border-radius: 20px;
-    box-shadow: 0 30px 80px rgba(0,0,0,.55);
+    box-shadow: 0 30px 80px rgba(0,0,0,.45);
   }
   .mark {
     width: 52px; height: 52px; border-radius: 15px; display: grid; place-items: center;
@@ -205,9 +284,115 @@ function loginPage({ mode = 'login', next = '/', error = '', usersExist = false 
   .foot { margin-top: 18px; font-size: 12px; color: #5c6b7e; text-align: center; }
   @media (prefers-reduced-motion: no-preference) { .card { animation: rise .35s ease-out; } }
   @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+  /* ---------- responsive: stack on phones / small tablets ---------- */
+  @media (max-width: 900px) {
+    .split { display: flex; flex-direction: column; grid-template-columns: none; }
+    .visual { height: clamp(210px, 34dvh, 300px); }
+    .visual-scrim {
+      background:
+        linear-gradient(180deg, rgba(5,8,11,.05) 0%, rgba(5,8,11,.18) 34%, rgba(7,10,14,.55) 58%, rgba(7,10,14,.82) 74%, #070a0e 86%, #070a0e 100%),
+        linear-gradient(90deg, rgba(5,8,11,.5) 0%, rgba(5,8,11,.12) 70%, rgba(5,8,11,0) 100%);
+    }
+    .brand { text-shadow: 0 2px 14px rgba(0,0,0,.6); }
+    .visual-copy h2 { text-shadow: 0 2px 18px rgba(0,0,0,.55); }
+    .visual-copy { padding: 18px 22px 46px; }
+    .visual-copy h2 { margin: 14px 0 0; font-size: 22px; letter-spacing: -.5px; }
+    .visual-copy p, .visual-points { display: none; }
+    .brand { font-size: 15px; gap: 10px; }
+    .brand .mark, .mark { width: 44px; height: 44px; border-radius: 13px; font-size: 20px; }
+    .mark.sm { width: 44px; height: 44px; }
+    .visual-rings span { width: 150px; height: 150px; }
+    /* Form sits on a rounded sheet that slides over the video. No drop
+       shadow: the video already fades to the sheet colour, and a shadow
+       would paint a dark line along the join. */
+    .panel {
+      position: relative; z-index: 1;
+      margin-top: -26px;
+      border-radius: 26px 26px 0 0;
+      box-shadow: none;
+      align-items: flex-start;
+      padding: 26px 16px calc(32px + env(safe-area-inset-bottom));
+      background:
+        radial-gradient(560px 420px at 100% 100%, rgba(124,243,160,.05), transparent 65%),
+        #070a0e;
+    }
+    .card { max-width: 480px; margin: 0 auto; padding: 24px 20px; border-radius: 18px; }
+  }
+
+  @media (max-width: 480px) {
+    .visual { height: clamp(180px, 26dvh, 250px); }
+    .visual-copy h2 { font-size: 19px; }
+    .card { padding: 22px 18px; }
+    h1 { font-size: 20px; }
+  }
+
+  /* Short landscape phones: drop the video band so the form can fit */
+  @media (max-width: 900px) and (max-height: 560px) {
+    .visual { display: none; }
+    .panel {
+      margin-top: 0; border-radius: 0; box-shadow: none;
+      min-height: 100dvh;
+      align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .card { max-width: 440px; padding: 20px; }
+    .mark { width: 38px; height: 38px; border-radius: 11px; font-size: 17px; }
+    h1 { font-size: 19px; margin: 12px 0 4px; }
+    p { margin-bottom: 14px; font-size: 13px; }
+    label { margin-bottom: 6px; }
+    input { padding: 11px 13px; }
+    button { margin-top: 12px; padding: 12px 14px; }
+    .toggle { margin-top: 12px; }
+    .or { margin: 14px 0 10px; }
+    .foot { display: none; }
+  }
+
+  @media (max-height: 660px) and (min-width: 901px) {
+    .visual-copy h2 { font-size: 28px; margin-top: 18px; }
+    .visual-points { display: none; }
+    .card { padding: 24px 22px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .visual-fallback::before, .visual-fallback::after, .visual-rings span { animation: none; }
+    .visual-rings { display: none; }
+  }
 </style>
 </head>
 <body>
+  <main class="split">
+    <!-- LEFT: video (falls back to an ambient animation if no video file) -->
+    <section class="visual" id="login-visual" aria-hidden="true">
+      <video id="login-video" autoplay muted loop playsinline preload="metadata" tabindex="-1" disablepictureinpicture${env.loginVideo ? '' : ' poster="/media/login-poster.jpg"'}>
+        ${env.loginVideo
+          ? `<source src="${env.loginVideo.replace(/"/g, '&quot;')}" />`
+          : `<source src="/media/login.mp4" type="video/mp4" />`}
+      </video>
+
+      <div class="visual-fallback">
+        <div class="visual-rings"><span></span><span></span><span></span></div>
+      </div>
+      <div class="visual-scrim"></div>
+
+      <div class="visual-copy">
+        <div class="brand">
+          <span class="mark">R</span>
+          <span>Ricky</span>
+        </div>
+        <h2>When it matters,<br />your inbox calls you.</h2>
+        <p>An important email arrives. Your phone rings, and Ricky reads it out loud — like a call, not another notification.</p>
+        <ul class="visual-points">
+          <li>Security alerts</li>
+          <li>Interviews</li>
+          <li>Deadlines</li>
+          <li>VIP senders</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- RIGHT: sign in / sign up -->
+    <section class="panel">
   <form class="card" id="auth-form" method="post" action="/login">
     <div class="mark">R</div>
     <h1 id="auth-title">${title}</h1>
@@ -238,6 +423,8 @@ function loginPage({ mode = 'login', next = '/', error = '', usersExist = false 
     ` : ''}
     <div class="foot">This device stays signed in for 30 days.</div>
   </form>
+    </section>
+  </main>
   <script>
     function onToggleClick(e) {
       e.preventDefault();
@@ -290,6 +477,34 @@ function loginPage({ mode = 'login', next = '/', error = '', usersExist = false 
         card.insertBefore(errDiv, card.querySelector('button[type="submit"]'));
       }
     }
+
+    /* Left-panel video: reveal only once it actually plays, else keep the
+       ambient fallback so the page never shows a broken video box. */
+    (function () {
+      const visual = document.getElementById('login-visual');
+      const video = document.getElementById('login-video');
+      if (!visual || !video) return;
+
+      const show = () => visual.classList.add('has-video');
+      if (video.readyState >= 2) show();
+      video.addEventListener('loadeddata', show, { once: true });
+
+      // <source> failures do not bubble to the <video> element, so track them.
+      const sources = Array.from(video.querySelectorAll('source'));
+      let failed = 0;
+      const fail = () => {
+        failed += 1;
+        if (failed >= sources.length) {
+          visual.classList.add('no-video');
+          visual.classList.remove('has-video');
+        }
+      };
+      sources.forEach((source) => source.addEventListener('error', fail, { once: true }));
+      video.addEventListener('error', fail, { once: true });
+
+      const attempt = video.play();
+      if (attempt && typeof attempt.catch === 'function') attempt.catch(() => {});
+    })();
   </script>
 </body>
 </html>`;
@@ -301,8 +516,8 @@ authRouter.get('/login', async (req, res) => {
   const users = userStore.data || [];
   const usersExist = users.length > 0;
 
-  // If auth is not required and no users exist, just go to app
-  if (!APP_PASSWORD && !usersExist) return res.redirect('/');
+  // If no users exist yet, just go to app
+  if (!usersExist) return res.redirect('/');
 
   if (isAuthed(req)) return res.redirect(safeNext(req.query.next));
 
@@ -320,16 +535,6 @@ authRouter.post('/login', async (req, res) => {
   const mode = req.body?.mode || 'login';
   const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
-
-  // Legacy APP_PASSWORD mode (no email)
-  if (APP_PASSWORD && !email && password) {
-    if (!safeEqual(password, APP_PASSWORD)) {
-      return res.redirect(`/login?error=${encodeURIComponent('That password is not right.')}&next=${encodeURIComponent(next)}`);
-    }
-    const token = crypto.createHmac('sha256', secret).update('app-password-v1').digest('hex');
-    res.cookie(COOKIE, token, cookieOptions(req));
-    return res.redirect(next);
-  }
 
   // Per-user email/password mode
   if (mode === 'register') {

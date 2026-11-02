@@ -25,7 +25,7 @@ const server = app.listen(env.port, env.host, async () => {
   console.log(`  Voice:    ${env.tts.elevenApiKey ? 'ElevenLabs (Edge fallback)' : 'Edge neural (free)'}`);
   console.log(`  Storage:  ${env.redis.url ? 'Upstash Redis' : 'local data/ folder'}`);
   console.log(`  Push:     ${env.vapid.publicKey ? 'VAPID from env' : 'auto-generated keys'}`);
-  console.log(`  Access:   ${env.appPassword ? 'password protected' : 'OPEN - set APP_PASSWORD before going public'}`);
+  console.log(`  Access:   OPEN - register and sign in to use`);
   console.log(
     seconds
       ? `  Scanning every ${seconds}s\n`

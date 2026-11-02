@@ -1,6 +1,6 @@
 /* Ricky service worker — receives the "incoming call" push and opens the app. */
 
-const VERSION = 'ricky-v16';
+const VERSION = 'ricky-v17';
 const SHELL = [
   '/',
   '/styles.css',
@@ -37,7 +37,12 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
 
   // Never cache API traffic: calls, alerts and audio must always be fresh.
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/oauth2callback')) return;
+  // Media is skipped too, so a replaced login video shows up immediately.
+  if (
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/oauth2callback') ||
+    url.pathname.startsWith('/media/')
+  ) return;
 
   // Navigations: network first so a new deploy shows up, cache as offline fallback.
   if (request.mode === 'navigate') {

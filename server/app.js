@@ -133,6 +133,8 @@ export function createApp() {
   // Client-side routes fall back to the app shell.
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api')) return next();
+    // Missing login-page media should 404 (not return HTML to a <video> tag).
+    if (req.path.startsWith('/media/')) return res.status(404).type('text').send('Not found');
     res.sendFile(path.join(publicDir, 'index.html'));
   });
 
