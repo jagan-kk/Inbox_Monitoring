@@ -1,15 +1,19 @@
 name: scan-inbox
 
-# Free scheduler for hosts that cannot poll in-process (Render free, Vercel).
-# Add these repository secrets:
+# Manual-only workflow.
+# The 5-minute schedule was removed because this app is not deployed, so every
+# scheduled run failed and filled the Actions tab with red X's.
+# Trigger it by hand from the Actions tab once a host is actually live.
+#
+# If you deploy later, add these repository secrets:
 #   RICKY_URL    https://your-app.onrender.com
 #   CRON_SECRET  the same value as the server's CRON_SECRET
-#
-# GitHub delays scheduled jobs under load, so treat this as "every ~5-15 min".
-# For tighter timing use cron-job.org against the same URL.
+# and restore the schedule:
+#   on:
+#     schedule:
+#       - cron: "*/5 * * * *"
+#     workflow_dispatch:
 on:
-  schedule:
-    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -27,6 +31,10 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
+          if [ -z "${RICKY_URL:-}" ]; then
+            echo "::notice::RICKY_URL secret is not set - nothing to scan. Skipping."
+            exit 0
+          fi
           base="${RICKY_URL%/}"
           echo "Scanning ${base}"
           response=$(curl -sS --max-time 90 --retry 3 --retry-delay 10 \
